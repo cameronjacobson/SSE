@@ -3,6 +3,7 @@
 namespace SSE;
 
 use \SplQueue;
+use \Event;
 use \EventDnsBase;
 use \EventBufferEvent;
 

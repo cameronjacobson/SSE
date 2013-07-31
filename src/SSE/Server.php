@@ -3,6 +3,7 @@
 namespace SSE;
 
 use \EventBase;
+use \EventUtil;
 use \EventListener;
 
 class Server
