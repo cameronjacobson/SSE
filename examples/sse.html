@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+<!--
+	Open this file in browser after starting up examples/ex.php
+-->
+<script type="text/javascript">
+	var source = new EventSource('http://hostname:20000/',{withCredentials:false});
+	source.onopen = function(e){
+		console.log('opened');
+	}
+	source.onerror = function(e){
+		console.log('error');
+		console.log(e);
+	}
+	source.onmessage = function(e) {
+		console.log('message');
+	}
+	source.addEventListener('initialize', function(e){
+		console.log(e.data);
+	});
+</script>
+</head>
+<body>
+
+</body>
+</html>

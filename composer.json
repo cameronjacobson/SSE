@@ -1,0 +1,12 @@
+{
+	"name":"phpsse/phpsse",
+    "require": {
+        "php": ">=5.4.0",
+        "ext-event": "*"
+    },
+	"autoload": {
+		"psr-0": {
+			"SSE": "src/"
+		}
+	}
+}
