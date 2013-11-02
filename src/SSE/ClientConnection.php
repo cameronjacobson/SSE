@@ -149,7 +149,6 @@ class ClientConnection
 				$message = $this->queue->dequeue();
 				$this->send($message);
 			}
-			$this->send('initialize:'.json_encode('hello'));
 			Server::assignUUID($this->ident, $this->uuid);
 		}
 	}

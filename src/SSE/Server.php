@@ -55,8 +55,11 @@ class Server
 	}
 
 	public static function sendMessage($serverident, $uuid, $message){
-		self::$established[$uuid]->send('message: '.$message);
-		self::$conn[$serverident] = null;
+		if(!empty(self::$established[$uuid])){
+			self::$established[$uuid]->send('message: '.$message);
+		}
+		self::$conn[$serverident]->__destruct();
+		unset(self::$conn[$serverident]);
 	}
 
 	public function serverConnCallback($listener, $fd, $address, $ctx) {
@@ -77,7 +80,7 @@ class Server
 	}
 
 	private function getUUID(){
-		return microtime(true);
+		return microtime(true).rand(100000,999999);
 	}
 }
 

@@ -13,6 +13,7 @@ class ServerConnection
 	public function __destruct() {
 		$this->bev->free();
 	}
+
 	public function __construct($base, $fd, $ident){
 		$this->base = $base;
 		$this->ident = $ident;
