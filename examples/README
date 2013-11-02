@@ -1,0 +1,11 @@
+USAGE:
+------------
+
+NOTE: The index.html file is pointing to an arbitrary UUID resource.
+      This UUID represents the unique client connection.
+
+1) Run examples/ex.php
+2) Visit:  examples/index.html in your browser
+     This subsequently attaches to the 'ex.php' server on port 20000 via the 'EventSource' object
+3) To send a message from server to this client, run the following from command line:
+     curl -XPOST localhost:9499/04ea2a5700e84891c547183db020608e -d '"Hello World"'

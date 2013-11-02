@@ -22,12 +22,13 @@ class ClientConnection
 		$this->bev->free();
 	}
 
-	public function __construct($base, $fd){
+	public function __construct($base, $fd, $ident){
 		$this->status = self::CONNECTED;
 		$this->buffer = '';
 		$this->base = $base;
 		$this->fd = $fd;
 		$this->queue = new SplQueue();
+		$this->ident = $ident;
 
 		$dns_base = new EventDnsBase($this->base, TRUE);
 
@@ -110,7 +111,9 @@ class ClientConnection
 		if(strpos($request, "\r\n\r\n") !== false){
 			list($headers) = explode("\r\n\r\n", $request,2);
 			$headers = explode("\r\n", $headers);
-			array_shift($headers);
+			$firstline = array_shift($headers);
+			preg_match("|^GET\s+?/([^\s]+?)\s|",$firstline,$match);
+			$this->uuid = $match[1];
 			foreach($headers as $header){
 				if(empty($header)){
 					continue;
@@ -122,6 +125,9 @@ class ClientConnection
 						// RETRIEVE LAST EVENT ID AND SET ID
 						$this->id = (int)$value;
 						$this->send('initialize:'.json_encode('hello-lasteventid'));
+						break;
+					default:
+						//echo $key.':'.$value.PHP_EOL;
 						break;
 				}
 			}
@@ -144,6 +150,7 @@ class ClientConnection
 				$this->send($message);
 			}
 			$this->send('initialize:'.json_encode('hello'));
+			Server::assignUUID($this->ident, $this->uuid);
 		}
 	}
 }

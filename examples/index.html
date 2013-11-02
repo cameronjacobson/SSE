@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+<!--
+	Open this file in browser after starting up examples/ex.php
+-->
+<script type="text/javascript">
+	var source = new EventSource('http://sse.datashovel.com:20000/04ea2a5700e84891c547183db020608e',{withCredentials:false});
+	source.onopen = function(e){
+		console.log('opened');
+	}
+	source.onerror = function(e){
+		console.log('error');
+		console.log(e);
+		this.close();
+	}
+	source.onmessage = function(e) {
+		console.log(e);
+	}
+	source.addEventListener('initialize', function(e){
+		console.log(e.data);
+	});
+</script>
+</head>
+<body>
+
+</body>
+</html>

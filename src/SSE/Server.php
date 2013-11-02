@@ -9,8 +9,8 @@ use \EventListener;
 class Server
 {
 	public $base, $listener, $socket;
-	private $conn = array();
-	public static $connections;
+	private static $conn = array();
+	private static $established = array();
 
 	public function __construct(){
 		$this->base = new EventBase();
@@ -34,7 +34,7 @@ class Server
 	}
 
 	public function __destruct() {
-		foreach ($this->conn as &$c) $c = NULL;
+		foreach (self::$conn as &$c) $c = NULL;
 	}
 
 	public function dispatch() {
@@ -43,12 +43,26 @@ class Server
 
 	public function clientConnCallback($listener, $fd, $address, $ctx) {
 		$base = $this->base;
-		$this->conn[] = new ClientConnection($base, $fd);
+		$ident = $this->getUUID();
+		self::$conn[$ident] = new ClientConnection($base, $fd, $ident);
+	}
+
+	public static function assignUUID($ident, $uuid){
+		if(empty(self::$established[$uuid])){
+			self::$established[$uuid] = self::$conn[$ident];
+		}
+		unset(self::$conn[$ident]);
+	}
+
+	public static function sendMessage($serverident, $uuid, $message){
+		self::$established[$uuid]->send('message: '.$message);
+		self::$conn[$serverident] = null;
 	}
 
 	public function serverConnCallback($listener, $fd, $address, $ctx) {
 		$base = $this->base;
-		$this->conn[] = new ServerConnection($base, $fd);
+		$ident = $this->getUUID();
+		self::$conn[$ident] = new ServerConnection($base, $fd, $ident);
 	}
 
 	public function accept_error_cb($listener, $ctx) {
