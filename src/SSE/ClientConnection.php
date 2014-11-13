@@ -9,12 +9,7 @@ use \EventBufferEvent;
 
 class ClientConnection
 {
-	private $bev, $base, $buffer, $id, $queue, $fd;
-	public $status;
-
-	const CONNECTED = 1;
-	const INITIALIZED = 2;
-	const READY = 4;
+	private $bev, $base, $buffer, $id, $fd;
 
 	const MIN_WATERMARK = 1;
 
@@ -23,11 +18,9 @@ class ClientConnection
 	}
 
 	public function __construct($base, $fd, $ident){
-		$this->status = self::CONNECTED;
 		$this->buffer = '';
 		$this->base = $base;
 		$this->fd = $fd;
-		$this->queue = new SplQueue();
 		$this->ident = $ident;
 
 		$dns_base = new EventDnsBase($this->base, TRUE);
@@ -40,7 +33,6 @@ class ClientConnection
 			array($this,'readCallback'),
 			array($this,'writeCallback'),
 			array($this,'eventCallback')
-			/* , $arg */
 		);
 
 		$this->bev->setWatermark(Event::READ|Event::WRITE, self::MIN_WATERMARK, 0);
@@ -48,21 +40,30 @@ class ClientConnection
 		if(!$this->bev->enable(Event::READ | Event::WRITE)){
 			echo 'failed to enable'.PHP_EOL;
 		}
-	}
 
-	private function getUUID(){
-		return (string)rand(1000,9999);
+        // If client hasn't sent headers within 3 sec, kill it
+        $e = Event::timer($base, function() use (&$e, $ident){
+			if(empty($this->headers)){
+            	$e->delTimer();
+            	Server::disconnect('client',$ident);
+			}
+        });
+        $e->addTimer(3);
 	}
 
 	public function readCallback($bev/*, $arg*/) {
-		$bev->readBuffer($bev->input);
-		while($line = $bev->input->read(512)){
-			if($this->status === self::READY){
-				return;
+		$input = $bev->getInput();
+		if(empty($this->headers)){
+			if($pos = $input->search("\r\n\r\n")){
+				$this->headers = $this->processHeaders($input->read($pos));
+				$this->processRequest();
 			}
-			$this->buffer .= $line;
 		}
-		$this->processRequest();
+		else{
+			if($input->length > 0){
+				$input->read($input->length);
+			}
+		}
 	}
 
 	public function writeCallback($bev/*, $arg*/) {
@@ -73,83 +74,63 @@ class ClientConnection
 		if ($events & EventBufferEvent::TIMEOUT) {
 		}
 		if ($events & EventBufferEvent::EOF) {
-			$bev->readBuffer($bev->input);
-			$this->buffer .= $bev->input->read(1024);
 		}
 		if ($events & EventBufferEvent::ERROR) {
 		}
 	}
 
-	public function send($message){
-		if($this->status === self::READY){
-			list($event, $data) = explode(':', $message,2);
-			$event = trim($event);
-			$data = trim($data);
-			if(empty($event) || !ctype_alpha($event)){
-				return;
-			}
-			if(empty($data) || !is_string($data) || preg_match("/[^\x20-\x7E]/", $data)){
-				return;
-			}
-			$message = 'event: '.$event."\n".
-                'data: '.trim($data)."\n".
-                'id: '.(++$this->id)."\n\n";
-			$output = $this->bev->output;
-			$output->add($message);
-		}
-		else{
-			$this->queue->enqueue($message);
-		}
-	}
-
-	private function processRequest(){
+	private function processHeaders($buffer){
 		/**
 		 *  TODO:
 		 *   - Read received headers for Last-Event-ID
 		 */
-		$request = $this->buffer;
-		if(strpos($request, "\r\n\r\n") !== false){
-			list($headers) = explode("\r\n\r\n", $request,2);
-			$headers = explode("\r\n", $headers);
-			$firstline = array_shift($headers);
-			preg_match("|^GET\s+?/([^\s]+?)\s|",$firstline,$match);
-			$this->uuid = $match[1];
-			foreach($headers as $header){
-				if(empty($header)){
-					continue;
-				}
+		$headers = explode("\r\n", $buffer);
+		$firstline = array_shift($headers);
+		preg_match("|^GET\s+?/([^\s]+?)\s|",$firstline,$match);
+		$this->uuid = $match[1];
 
-				list($key,$value) = explode(":",$header,2);
-				switch(strtolower(trim($key))){
-					case 'last-event-id':
-						// RETRIEVE LAST EVENT ID AND SET ID
-						$this->id = (int)$value;
-						$this->send('initialize:'.json_encode('hello-lasteventid'));
-						break;
-					default:
-						//echo $key.':'.$value.PHP_EOL;
-						break;
-				}
-			}
-
-			$output = $this->bev->output;
-			$output->add(
-				'HTTP/1.1 200 OK'."\r\n".
-				'Date: '.gmdate('D, d M Y H:i:s').' GMT'."\r\n".
-				'Server: Server-Sent-Events 0.1'."\r\n".
-				'MIME-version: 1.0'."\r\n".
-				'Last-Modified: '.gmdate('D, d M Y H:i:s').' GMT'."\r\n".
-				'Access-Control-Allow-Origin: *'."\r\n".
-				"Content-Type: text/event-stream; charset=utf-8\r\n\r\n\n\n"
-			);
-
-			$this->id = empty($this->id) ? 0 : $this->id;
-			$this->status = self::READY;
-			while(count($this->queue) > 0){
-				$message = $this->queue->dequeue();
-				$this->send($message);
-			}
-			Server::assignUUID($this->ident, $this->uuid);
+		$return = array();
+		foreach($headers as $header){
+			list($k,$v) = explode(':',$header);
+			$return[trim(strtolower($k))] = trim(strtolower($v));
 		}
+		return $return;
+	}
+
+
+	public function send($message){
+		list($event, $data) = explode(':', $message,2);
+		$event = trim($event);
+		$data = trim($data);
+		if(empty($event) || !ctype_alpha($event)){
+			return;
+		}
+		if(empty($data) || !is_string($data) || preg_match("/[^\x20-\x7E]/", $data)){
+			return;
+		}
+		$message = 'event: '.$event."\n".
+			'data: '.trim($data)."\n".
+			'id: '.(++$this->id)."\n\n";
+		$output = $this->bev->output;
+		$output->add($message);
+	}
+
+	private function processRequest(){
+
+		$this->id = empty($this->headers['last-event-id']) ? 0 : $this->headers['last-event-id'];
+
+		$output = $this->bev->output;
+		$output->add(implode("\r\n",array(
+			'HTTP/1.1 200 OK',
+			'Date: '.gmdate('D, d M Y H:i:s').' GMT',
+			'Server: Server-Sent-Events 0.1',
+			'MIME-version: 1.0',
+			'Last-Modified: '.gmdate('D, d M Y H:i:s').' GMT',
+			'Access-Control-Allow-Origin: *',
+			"Content-Type: text/event-stream; charset=utf-8",
+			"",""
+		)));
+
+		Server::assignUUID('client', $this->ident, $this->uuid);
 	}
 }

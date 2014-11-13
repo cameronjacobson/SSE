@@ -9,10 +9,11 @@ use \EventListener;
 class Server
 {
 	public $base, $listener, $socket;
-	private static $conn = array();
+	public static $conn = array();
 	private static $established = array();
 
 	public function __construct(){
+		self::$conn = array('server'=>array(),'client'=>array());
 		$this->base = new EventBase();
 
 		$this->browserListener = new EventListener($this->base,
@@ -44,28 +45,33 @@ class Server
 	public function clientConnCallback($listener, $fd, $address, $ctx) {
 		$base = $this->base;
 		$ident = $this->getUUID();
-		self::$conn[$ident] = new ClientConnection($base, $fd, $ident);
+		self::$conn['client'][$ident] = new ClientConnection($base, $fd, $ident);
 	}
 
-	public static function assignUUID($ident, $uuid){
+	public function serverConnCallback($listener, $fd, $address, $ctx) {
+		$base = $this->base;
+		$ident = $this->getUUID();
+		self::$conn['server'][$ident] = new ServerConnection($base, $fd, $ident);
+	}
+
+	public static function assignUUID($conntype, $ident, $uuid){
 		if(empty(self::$established[$uuid])){
-			self::$established[$uuid] = self::$conn[$ident];
+			self::$established[$uuid] = self::$conn[$conntype][$ident];
 		}
-		unset(self::$conn[$ident]);
+		unset(self::$conn[$conntype][$ident]);
 	}
 
 	public static function sendMessage($serverident, $uuid, $message){
 		if(!empty(self::$established[$uuid])){
 			self::$established[$uuid]->send('message: '.$message);
 		}
-		self::$conn[$serverident]->__destruct();
-		unset(self::$conn[$serverident]);
 	}
 
-	public function serverConnCallback($listener, $fd, $address, $ctx) {
-		$base = $this->base;
-		$ident = $this->getUUID();
-		self::$conn[$ident] = new ServerConnection($base, $fd, $ident);
+	public static function disconnect($conntype, $ident){
+		if(!empty(self::$conn[$conntype][$ident])){
+			self::$conn[$conntype][$ident]->__destruct();
+			unset(self::$conn[$conntype][$ident]);
+		}
 	}
 
 	public function accept_error_cb($listener, $ctx) {
@@ -80,7 +86,13 @@ class Server
 	}
 
 	private function getUUID(){
-		return microtime(true).rand(100000,999999);
+		return sprintf(
+			'%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
+			mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff),
+			mt_rand(0, 0x0fff) | 0x4000,
+			mt_rand(0, 0x3fff) | 0x8000,
+			mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff)
+		);
 	}
 }
 

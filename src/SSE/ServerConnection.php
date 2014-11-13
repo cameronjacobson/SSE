@@ -18,29 +18,36 @@ class ServerConnection
 		$this->base = $base;
 		$this->ident = $ident;
 		$this->bev = new EventBufferEvent($base, $fd, EventBufferEvent::OPT_CLOSE_ON_FREE);
-
-		$this->bev->setCallbacks(array($this, "echoReadCallback"), NULL,
-			array($this, "echoEventCallback"), NULL
+		$this->processed = array();
+		$this->bev->setCallbacks(array($this, "readCallback"), NULL,
+			array($this, "eventCallback"), NULL
 		);
+
 		$this->bev->enable(Event::READ);
 
-		$this->uuid = $this->getUUID();
-		$this->bev->uuid = $this->uuid;
+		// If unable to process request within 3 sec, kill it
+		$e = Event::timer($base, function() use (&$e,$ident){
+			$e->delTimer();
+			Server::disconnect('server',$ident);
+		});
+		$e->addTimer(3);
 	}
 
-	private function getUUID(){
-		return (string)rand(1000,9999);
-	}
-
-	public function echoReadCallback($bev, $ctx) {
-		$bev->readBuffer($bev->input);
-		while($line = $bev->input->read(512)){
-			$this->buffer .= $line;
+	public function readCallback($bev, $ctx) {
+		$input = $bev->getInput();
+		if(empty($this->headers) && ($pos = $input->search("\r\n\r\n"))){
+			$this->headers = $this->processHeaders($input->read($pos));
+			if(empty($this->headers['content-length'])){
+				Server::disconnect('server',$this->ident);
+			}
 		}
-		$this->processRequest();
+		if($input->length >= $this->headers['content-length']+4){
+			$this->body = $input->read($this->headers['content-length'] + 4);
+			$this->processRequest();
+		} 
 	}
 
-	public function echoEventCallback($bev, $events, $ctx) {
+	public function eventCallback($bev, $events, $ctx) {
 		if ($events & EventBufferEvent::ERROR) {
 		}
 
@@ -48,30 +55,37 @@ class ServerConnection
 		}
 	}
 
-	private function processRequest(){
+	private function processHeaders($buffer){
 		/**
 		 *  TODO:
 		 *   - Read received headers for Last-Event-ID
 		 */
-		$request = $this->buffer;
-		if(strpos($request, "\r\n\r\n") !== false){
-			list($headers,$body) = explode("\r\n\r\n", $request,2);
-			$headers = explode("\r\n", $headers);
-			$firstline = array_shift($headers);
-			preg_match("|^POST\s+?/([^\s]+?)\s|",$firstline,$match);
-			$clientUUID = $match[1];
+		$headers = explode("\r\n", $buffer);
+		$firstline = array_shift($headers);
+		preg_match("|^POST\s+?/([^\s]+?)\s|",$firstline,$match);
+		$this->clientUUID = $match[1];
 
-			$output = $this->bev->output;
-			$output->add(
-				'HTTP/1.1 200 OK'."\r\n".
-				'Date: '.gmdate('D, d M Y H:i:s').' GMT'."\r\n".
-				'Server: Server-Sent-Events 0.1'."\r\n".
-				'MIME-version: 1.0'."\r\n".
-				"Content-Type: text/plain; charset=utf-8\r\n".
-				"Content-Length: 0\r\n\r\n"
-			);
-
-			Server::sendMessage($this->ident, $clientUUID, $body);
+		$return = array();
+		foreach($headers as $header){
+			list($k,$v) = explode(':',$header);
+			$return[trim(strtolower($k))] = trim(strtolower($v));
 		}
+		return $return;
+	}
+
+	private function processRequest(){
+		$output = $this->bev->output;
+		$output->add(implode("\r\n", array(
+			'HTTP/1.1 200 OK',
+			'Date: '.gmdate('D, d M Y H:i:s').' GMT',
+			'Server: Server-Sent-Events 0.1',
+			'MIME-version: 1.0',
+			"Content-Type: text/plain; charset=utf-8",
+			"Content-Length: 0",
+			"",""
+		)));
+
+		Server::sendMessage($this->ident, $this->clientUUID, $this->body);
+		Server::disconnect('server',$this->ident);
 	}
 }
