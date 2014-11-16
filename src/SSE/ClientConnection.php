@@ -6,6 +6,8 @@ use \SplQueue;
 use \Event;
 use \EventDnsBase;
 use \EventBufferEvent;
+use \SSE\EventStoreInterface;
+use \SSE\Event as SSE_Event;
 
 class ClientConnection
 {
@@ -17,11 +19,13 @@ class ClientConnection
 		$this->bev->free();
 	}
 
-	public function __construct($base, $fd, $ident){
+	public function __construct($base, $fd, $ident, EventStoreInterface $eventStore){
 		$this->buffer = '';
 		$this->base = $base;
 		$this->fd = $fd;
 		$this->ident = $ident;
+		$this->id = 0;
+		$this->eventStore = $eventStore;
 
 		$dns_base = new EventDnsBase($this->base, TRUE);
 
@@ -44,9 +48,9 @@ class ClientConnection
         // If client hasn't sent headers within 3 sec, kill it
         $e = Event::timer($base, function() use (&$e, $ident){
 			if(empty($this->headers)){
-            	$e->delTimer();
             	Server::disconnect('client',$ident);
 			}
+            $e->delTimer();
         });
         $e->addTimer(3);
 	}
@@ -98,7 +102,7 @@ class ClientConnection
 	}
 
 
-	public function send($message){
+	public function send($message, $id = null){
 		list($event, $data) = explode(':', $message,2);
 		$event = trim($event);
 		$data = trim($data);
@@ -108,16 +112,29 @@ class ClientConnection
 		if(empty($data) || !is_string($data) || preg_match("/[^\x20-\x7E]/", $data)){
 			return;
 		}
-		$message = 'event: '.$event."\n".
-			'data: '.trim($data)."\n".
-			'id: '.(++$this->id)."\n\n";
+
+		$this->id = empty($id) ? ++$this->id : $id;
+
+		$evt = new SSE_Event();
+		$evt->id = $this->id;
+		$evt->event = $event;
+		$evt->data = $data;
+
+		$this->eventStore->putEvent($evt);
+
+		$message = implode("\n",array(
+			'event: '.$event,
+			'data: '.trim($data),
+			'id: '.$this->id,
+			"",""
+		));
 		$output = $this->bev->output;
 		$output->add($message);
 	}
 
 	private function processRequest(){
 
-		$this->id = empty($this->headers['last-event-id']) ? 0 : $this->headers['last-event-id'];
+		$last_event_id = empty($this->headers['last-event-id']) ? 0 : $this->headers['last-event-id'];
 
 		$output = $this->bev->output;
 		$output->add(implode("\r\n",array(
@@ -132,5 +149,10 @@ class ClientConnection
 		)));
 
 		Server::assignUUID('client', $this->ident, $this->uuid);
+
+		$events = $this->eventStore->getEvents($this->uuid, $last_event_id);
+		foreach($events as $event){
+			$this->send($event->data, $event->id);
+		}
 	}
 }

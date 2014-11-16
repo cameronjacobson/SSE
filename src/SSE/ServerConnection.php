@@ -5,6 +5,7 @@ namespace SSE;
 use \Event;
 use \EventBuffer;
 use \EventBufferEvent;
+use \SSE\EventStoreInterface;
 
 class ServerConnection
 {
@@ -14,9 +15,10 @@ class ServerConnection
 		$this->bev->free();
 	}
 
-	public function __construct($base, $fd, $ident){
+	public function __construct($base, $fd, $ident, EventStoreInterface $eventStore){
 		$this->base = $base;
 		$this->ident = $ident;
+		$this->eventStore = $eventStore;
 		$this->bev = new EventBufferEvent($base, $fd, EventBufferEvent::OPT_CLOSE_ON_FREE);
 		$this->processed = array();
 		$this->bev->setCallbacks(array($this, "readCallback"), NULL,
@@ -27,8 +29,8 @@ class ServerConnection
 
 		// If unable to process request within 3 sec, kill it
 		$e = Event::timer($base, function() use (&$e,$ident){
-			$e->delTimer();
 			Server::disconnect('server',$ident);
+			$e->delTimer();
 		});
 		$e->addTimer(3);
 	}
@@ -85,7 +87,7 @@ class ServerConnection
 			"",""
 		)));
 
-		Server::sendMessage($this->ident, $this->clientUUID, $this->body);
+		Server::sendMessage($this->clientUUID, $this->body);
 		Server::disconnect('server',$this->ident);
 	}
 }

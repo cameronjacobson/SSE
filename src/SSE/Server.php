@@ -5,16 +5,22 @@ namespace SSE;
 use \EventBase;
 use \EventUtil;
 use \EventListener;
+use \SSE\EventStoreInterface;
 
 class Server
 {
 	public $base, $listener, $socket;
 	public static $conn = array();
 	private static $established = array();
+	private $eventStore;
+	public static $subscriptions;
 
-	public function __construct(){
+	public function __construct(EventStoreInterface $eventStore){
 		self::$conn = array('server'=>array(),'client'=>array());
 		$this->base = new EventBase();
+
+		$this->eventStore = $eventStore;
+		self::$subscriptions = $this->eventStore->getAllSubscriptions();
 
 		$this->browserListener = new EventListener($this->base,
 			array($this, "clientConnCallback"), $this->base,
@@ -25,9 +31,15 @@ class Server
 		$this->serverListener = new EventListener($this->base,
 			array($this, 'serverConnCallback'), $this->base,
 			EventListener::OPT_CLOSE_ON_FREE | EventListener::OPT_REUSEABLE, -1,
-			"127.0.0.1:9499");
+			"127.0.0.1:9499"
+		);
 
 		$this->browserListener->setErrorCallback(array($this, "accept_error_cb"));
+	}
+
+	public static function setSubscription($uuid,$name){
+		self::$subscriptions[$name] = @self::$subscriptions[$name] || array();
+		self::$subscriptions[$name][] = $uuid;
 	}
 
 	public function loop(){
@@ -45,13 +57,13 @@ class Server
 	public function clientConnCallback($listener, $fd, $address, $ctx) {
 		$base = $this->base;
 		$ident = $this->getUUID();
-		self::$conn['client'][$ident] = new ClientConnection($base, $fd, $ident);
+		self::$conn['client'][$ident] = new ClientConnection($base, $fd, $ident, $this->eventStore);
 	}
 
 	public function serverConnCallback($listener, $fd, $address, $ctx) {
 		$base = $this->base;
 		$ident = $this->getUUID();
-		self::$conn['server'][$ident] = new ServerConnection($base, $fd, $ident);
+		self::$conn['server'][$ident] = new ServerConnection($base, $fd, $ident, $this->eventStore);
 	}
 
 	public static function assignUUID($conntype, $ident, $uuid){
@@ -61,9 +73,15 @@ class Server
 		unset(self::$conn[$conntype][$ident]);
 	}
 
-	public static function sendMessage($serverident, $uuid, $message){
+	public static function sendMessage($uuid, $message){
 		if(!empty(self::$established[$uuid])){
 			self::$established[$uuid]->send('message: '.$message);
+		}
+	}
+
+	public static function sendGroupMessage($group,$message){
+		foreach(self::$subscriptions[$group] as $uuid){
+			self::sendMessage($uuid, $message);
 		}
 	}
 
