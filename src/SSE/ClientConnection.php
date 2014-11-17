@@ -7,7 +7,7 @@ use \Event;
 use \EventDnsBase;
 use \EventBufferEvent;
 use \SSE\EventStoreInterface;
-use \SSE\Event as SSE_Event;
+use \SSE\SSEEvent;
 
 class ClientConnection
 {
@@ -115,10 +115,11 @@ class ClientConnection
 
 		$this->id = empty($id) ? ++$this->id : $id;
 
-		$evt = new SSE_Event();
+		$evt = new SSEEvent();
 		$evt->id = $this->id;
 		$evt->event = $event;
 		$evt->data = $data;
+		$evt->uuid = $this->uuid;
 
 		$this->eventStore->putEvent($evt);
 
@@ -133,7 +134,7 @@ class ClientConnection
 	}
 
 	private function processRequest(){
-
+var_dump($this->headers);
 		$last_event_id = empty($this->headers['last-event-id']) ? 0 : $this->headers['last-event-id'];
 
 		$output = $this->bev->output;
@@ -152,7 +153,7 @@ class ClientConnection
 
 		$events = $this->eventStore->getEvents($this->uuid, $last_event_id);
 		foreach($events as $event){
-			$this->send($event->data, $event->id);
+			$this->send($event['event'].':'.$event['data'], $event['id']);
 		}
 	}
 }

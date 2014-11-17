@@ -6,6 +6,8 @@ use \EventBase;
 use \EventUtil;
 use \EventListener;
 use \SSE\EventStoreInterface;
+use \Event;
+use \SSE\SSEEvent;
 
 class Server
 {

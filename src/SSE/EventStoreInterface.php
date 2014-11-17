@@ -2,15 +2,22 @@
 
 namespace SSE;
 
-use SSE\Event;
+use \SSE\SSEEvent;
+use \SSE\Subscription;
 
 interface EventStoreInterface
 {
-	public function put(Event $event);
+	public function putEvent(SSEEvent $event);
 
-	public function get($id = null);
+	public function putSubscription(Subscription $event);
 
-	public function delete($uuid);
+	public function getEvents($uuid, $id=0);
 
 	public function getSubscriptions($uuid);
+
+	public function getAllSubscriptions();
+
+	public function deleteEvents($uuid);
+
+	public function deleteSubscriptions($uuid);
 }

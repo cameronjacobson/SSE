@@ -2,6 +2,7 @@
 
 namespace SSE;
 
+use \SSE\SSEEvent;
 use \Event;
 use \EventBuffer;
 use \EventBufferEvent;

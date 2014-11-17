@@ -3,7 +3,7 @@
 namespace SSE;
 
 use \PDO;
-use \SSE\Event;
+use \SSE\SSEEvent;
 use \SSE\Subscription;
 
 class EventStore implements EventStoreInterface
@@ -22,12 +22,13 @@ class EventStore implements EventStoreInterface
 	}
 
 
-	public function putEvent(Event $event){
-		$sql = 'INSERT INTO events SET uuid = :uuid, id = :id, data = :data
-			ON DUPLICATE KEY UPDATE data = :data';
+	public function putEvent(SSEEvent $event){
+		$sql = 'INSERT INTO events SET uuid = :uuid, id = :id, data = :data, event = :event
+			ON DUPLICATE KEY UPDATE event = :event, data = :data';
 		$stmt = $this->db->prepare($sql);
 		$stmt->execute(array(
 			':uuid'=>$event->uuid,
+			':event'=>$event->event,
 			':id'=>$event->id,
 			':data'=>$event->data
 		));
@@ -57,12 +58,10 @@ class EventStore implements EventStoreInterface
 	}
 
 
-	public function getAllSubscriptions($uuid){
+	public function getAllSubscriptions(){
 		$sql = 'SELECT uuid,name FROM subscriptions';
 		$stmt = $this->db->prepare($sql);
-		$stmt->execute(array(
-			':uuid'=>$uuid
-		));
+		$stmt->execute();
 		$return = array();
 		$subscriptions = $stmt->fetchAll();
 		foreach($subscriptions as $subscription){
@@ -81,12 +80,13 @@ class EventStore implements EventStoreInterface
 			return array();
 		}
 
-		$sql = 'SELECT id,data
+		$sql = 'SELECT id,data,event
 			FROM events
-			WHERE uuid=:uuid AND id>=:id
+			WHERE uuid=:uuid AND id>:id
 			ORDER BY id ASC';
 		$stmt = $this->db->prepare($sql);
 		$stmt->execute(array(
+			':uuid'=>$uuid,
 			':id'=>$id
 		));
 		return $stmt->fetchAll();

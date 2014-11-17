@@ -2,7 +2,7 @@
 
 namespace SSE;
 
-class Event
+class SSEEvent
 {
 	public $id;
 	public $event;
