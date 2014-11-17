@@ -134,7 +134,6 @@ class ClientConnection
 	}
 
 	private function processRequest(){
-var_dump($this->headers);
 		$last_event_id = empty($this->headers['last-event-id']) ? 0 : $this->headers['last-event-id'];
 
 		$output = $this->bev->output;
