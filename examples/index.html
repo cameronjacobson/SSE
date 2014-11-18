@@ -4,19 +4,21 @@
 <!--
 	Open this file in browser after starting up examples/ex.php
 -->
+<script src="/js/es.js"></script>
+
 <script type="text/javascript">
 	var uuid = '04ea2a5700e84891c547183db020608e';
-	var source = new EventSource('http://sse.datashovel.com:20000/'+uuid,{withCredentials:false});
+	var source = new EventSource2('http://sse.datashovel.com:20000/'+uuid,{withCredentials:false});
+
 	source.onopen = function(e){
-		console.log('opened');
-	}
-	source.onerror = function(e){
-		console.log('error');
-		console.log(e);
-		this.close();
+		console.log('onopen',e);
 	}
 	source.onmessage = function(e) {
-		console.log(e);
+		console.log('onmessage',e);
+	}
+	source.onerror = function(e){
+		console.log('onerror',e);
+//		this.close();
 	}
 	source.addEventListener('initialize', function(e){
 		console.log(e.data);

@@ -71,7 +71,7 @@ class ClientConnection
 	}
 
 	public function writeCallback($bev/*, $arg*/) {
-		//$bev->output->writeBuffer($bev->output);
+		//var_dump($bev);
 	}
 
 	public function eventCallback($bev, $events/*, $arg*/) {
@@ -145,7 +145,7 @@ class ClientConnection
 			'Last-Modified: '.gmdate('D, d M Y H:i:s').' GMT',
 			'Access-Control-Allow-Origin: *',
 			"Content-Type: text/event-stream; charset=utf-8",
-			"",""
+			"","",""
 		)));
 
 		Server::assignUUID('client', $this->ident, $this->uuid);

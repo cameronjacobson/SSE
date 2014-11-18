@@ -114,10 +114,6 @@
 			}
 		}
 
-		var readyStateChange = function(e){
-			if(this.readyState == 3 || (this.readyState == 4 && this.status == 200)){ }
-		}
-
 		var Event = function(){
 			this.data = '';
 		}
@@ -147,8 +143,13 @@
 						break;
 				}
 			});
-console.log(ev,data);
 			callListeners(ev,data);
+		}
+
+		var readyStateChange = function(e){
+			if(this.xhrProgress && (this.readyState == 4) && (this.status == 200)){
+				this.xhrProgress();
+			}
 		}
 
 		var xhrProgress = function(e){
@@ -166,12 +167,12 @@ console.log(ev,data);
 					offset = 0;
 					stack = [];
 				}
+				else if(v === ""){/* do nothing */}
 				else{
 					stack.push(v);
 				}
 			});
 		}
-
 		var eventsource_connect = function(){
 			TRIES++;
 			var MINUTES = parseInt(((new Date().getTime() / 1000) - TIME_STARTED) / 60);

@@ -4,22 +4,21 @@
 <!--
 	Open this file in browser after starting up examples/ex.php
 -->
-
-// EventSource polyfill
-<script src="sse_polyfill.js"></script>
+<script src="/js/es.js"></script>
 
 <script type="text/javascript">
 	var uuid = '04ea2a5700e84891c547183db020608e';
-	var source = new EventSource('http://hostname:20000/'+uuid,{withCredentials:false});
+	var source = new EventSource2('http://sse.datashovel.com:20000/'+uuid,{withCredentials:false});
+
 	source.onopen = function(e){
-		console.log('opened');
-	}
-	source.onerror = function(e){
-		console.log('error');
-		console.log(e);
+		console.log('onopen',e);
 	}
 	source.onmessage = function(e) {
-		console.log('message');
+		console.log('onmessage',e);
+	}
+	source.onerror = function(e){
+		console.log('onerror',e);
+//		this.close();
 	}
 	source.addEventListener('initialize', function(e){
 		console.log(e.data);
