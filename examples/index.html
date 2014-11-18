@@ -5,7 +5,8 @@
 	Open this file in browser after starting up examples/ex.php
 -->
 <script type="text/javascript">
-	var source = new EventSource('http://sse.datashovel.com:20000/04ea2a5700e84891c547183db020608e',{withCredentials:false});
+	var uuid = '04ea2a5700e84891c547183db020608e';
+	var source = new EventSource('http://sse.datashovel.com:20000/'+uuid,{withCredentials:false});
 	source.onopen = function(e){
 		console.log('opened');
 	}
