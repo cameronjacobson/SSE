@@ -45,22 +45,32 @@ class ClientConnection
 			echo 'failed to enable'.PHP_EOL;
 		}
 
-        // If client hasn't sent headers within 3 sec, kill it
-        $e = Event::timer($base, function() use (&$e, $ident){
+		// If client hasn't sent headers within 3 sec, kill it
+		$e = Event::timer($base, function() use (&$e, $ident){
 			if(empty($this->headers)){
-            	Server::disconnect('client',$ident);
+				Server::disconnect('client',$ident);
 			}
-            $e->delTimer();
-        });
-        $e->addTimer(3);
+			$e->delTimer();
+		});
+		$e->addTimer(3);
 	}
 
 	public function readCallback($bev/*, $arg*/) {
 		$input = $bev->getInput();
 		if(empty($this->headers)){
 			if($pos = $input->search("\r\n\r\n")){
-				$this->headers = $this->processHeaders($input->read($pos));
-				$this->processRequest();
+				list($method,$resource,$this->headers) = $this->processHeaders($input->read($pos));
+				switch($method){
+					case 'OPTIONS':
+						$this->headers = array();
+						$this->processOptionsRequest($bev);
+						break;
+					case 'GET':
+						$this->processRequest();
+						break;
+					default:
+						break;
+				}
 			}
 		}
 		else{
@@ -90,15 +100,17 @@ class ClientConnection
 		 */
 		$headers = explode("\r\n", $buffer);
 		$firstline = array_shift($headers);
-		preg_match("|^GET\s+?/([^\s]+?)\s|",$firstline,$match);
-		$this->uuid = $match[1];
+		preg_match("/^(OPTIONS|GET)\s+?\/([^\s]+?)\s/",$firstline,$match);
 
+		$method = $match[1];
+		$resource = $match[2];
+		$this->uuid = $match[2];
 		$return = array();
 		foreach($headers as $header){
 			list($k,$v) = explode(':',$header);
 			$return[trim(strtolower($k))] = trim(strtolower($v));
 		}
-		return $return;
+		return array($method,$resource,$return);
 	}
 
 
@@ -144,6 +156,8 @@ class ClientConnection
 			'MIME-version: 1.0',
 			'Last-Modified: '.gmdate('D, d M Y H:i:s').' GMT',
 			'Access-Control-Allow-Origin: *',
+			'Access-Control-Allow-Methods: GET,OPTIONS',
+			'Access-Control-Allow-Headers: Last-Event-ID',
 			"Content-Type: text/event-stream; charset=utf-8",
 			"","",""
 		)));
@@ -154,5 +168,25 @@ class ClientConnection
 		foreach($events as $event){
 			$this->send($event['event'].':'.$event['data'], $event['id']);
 		}
+	}
+
+	private function processOptionsRequest($bev){
+		$last_event_id = empty($this->headers['last-event-id']) ? 0 : $this->headers['last-event-id'];
+
+		$output = $this->bev->output;
+		$output->add(implode("\r\n",array(
+			'HTTP/1.1 200 OK',
+			'Date: '.gmdate('D, d M Y H:i:s').' GMT',
+			'Server: Server-Sent-Events 0.1',
+			'Access-Control-Allow-Origin: *',
+			'Access-Control-Allow-Methods: GET,OPTIONS',
+			'Access-Control-Allow-Headers: Last-Event-ID',
+			'Access-Control-Max-Age: 1728000',
+			"Content-Type: text/plain; charset=utf-8",
+			'Keep-Alive: timeout=2, max=100',
+			'Connection: Keep-Alive',
+			'Content-Length: 0',
+			"",""
+		)));
 	}
 }

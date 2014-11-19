@@ -24,7 +24,7 @@
 
 		var TRIES = 0;
 		var TIME_STARTED = parseInt(new Date().getTime()/1000);
-		var RECONNECTION_TIME = 3000;
+		var RECONNECT_TIME = 3000;
 		// FAILURES ALLOWED PER MINUTE BEFORE ABORT
 		var FAILURES_PER_MINUTE = 5;
 
@@ -138,7 +138,7 @@
 						break;
 					case 'retry':
 						if((rctime = parseInt(value)) > 0){
-							RECONNECTION_TIME = rctime;
+							RECONNECT_TIME = rctime;
 						}
 						break;
 				}
@@ -173,6 +173,7 @@
 				}
 			});
 		}
+
 		var eventsource_connect = function(){
 			TRIES++;
 			var MINUTES = parseInt(((new Date().getTime() / 1000) - TIME_STARTED) / 60);
@@ -183,32 +184,41 @@
 			var xhr = new XMLHttpRequest();
 			xhr.onreadystatechange = readyStateChange.bind(xhr);
 			xhr.onprogress = xhrProgress.bind(xhr);
-			xhr.addEventListener('error', function(e){
-				readyState = CLOSED;
-				this.onerror(e)
-				if(!ABORTED){
-					window.setTimeout(function(){
-						eventsource_connect();
-					},RECONNECT_TIME);
-				}
-				xhr.abort();
-			}.bind(this),false);
+			xhr.onloadend = xhrLoadEnd.bind(xhr);
 
 			readyState = CONNECTING;
 			xhr.open('get', urlstring, true);
+			if(last_event_id > 0){
+				xhr.setRequestHeader("Last-Event-ID", last_event_id);
+			}
+
 			readyState = OPEN;
 			xhr.send();
 			window.setTimeout(function(){
-				this.onopen();
+				callListeners('open');
 			}.bind(this),0);
 		}.bind(this);
+
+		var startEventSource = function(){
+			window.setTimeout(function(){
+				eventsource_connect();
+			},RECONNECT_TIME);
+		}
+
+		var xhrLoadEnd = function(e){
+			readyState = CLOSED;
+			callListeners('error',e);
+			if(!ABORTED){
+				startEventSource();
+			}
+		}
 
 		eventsource_connect();
 
 		var callListeners = function(type,data){
 			if(listeners && listeners[type]){
 				var e = new Event();
-				e.data = JSON.parse(data);
+				e.data = typeof data === 'string' ? JSON.parse(data) : data;
 				if(typeof listeners[type] === 'function'){
 					listeners[type](e);
 					return;
@@ -218,7 +228,6 @@
 				});
 			}
 		}
-
 		return this;
 	}
 	global.EventSource2 = EventSource2;
