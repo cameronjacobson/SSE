@@ -143,7 +143,10 @@
 						break;
 				}
 			});
-			callListeners(ev,data);
+			if(data){
+				ev = ev || 'message';
+				callListeners(ev,data);
+			}
 		}
 
 		var readyStateChange = function(e){
@@ -191,6 +194,7 @@
 			if(last_event_id > 0){
 				xhr.setRequestHeader("Last-Event-ID", last_event_id);
 			}
+			xhr.setRequestHeader('Cache-Control','no-cache');
 
 			readyState = OPEN;
 			xhr.send();
