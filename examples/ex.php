@@ -10,3 +10,7 @@ $eventStore = new EventStore($config);
 
 $server = new Server($eventStore);
 $server->loop();
+
+function E($v){
+	error_log(var_export($v,true));
+}

@@ -30,7 +30,7 @@ class ServerConnection
 
 		// If unable to process request within 3 sec, kill it
 		$e = Event::timer($base, function() use (&$e,$ident){
-			Server::disconnect('server',$ident);
+			Server::disconnect('server',null,$ident,null);
 			$e->delTimer();
 		});
 		$e->addTimer(3);
@@ -41,7 +41,7 @@ class ServerConnection
 		if(empty($this->headers) && ($pos = $input->search("\r\n\r\n"))){
 			$this->headers = $this->processHeaders($input->read($pos));
 			if(empty($this->headers['content-length'])){
-				Server::disconnect('server',$this->ident);
+				Server::disconnect('server',null,$this->ident,null);
 			}
 		}
 		if($input->length >= $this->headers['content-length']+4){
@@ -89,6 +89,6 @@ class ServerConnection
 		)));
 
 		Server::sendMessage($this->clientUUID, $this->body);
-		Server::disconnect('server',$this->ident);
+		Server::disconnect('server',null,$this->ident,null);
 	}
 }

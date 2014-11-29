@@ -70,15 +70,24 @@ class Server
 
 	public static function assignUUID($conntype, $ident, $uuid){
 		if(empty(self::$established[$uuid])){
-			self::$established[$uuid] = self::$conn[$conntype][$ident];
+			self::$established[$uuid] = array();
 		}
+		self::$established[$uuid][] = self::$conn[$conntype][$ident];
 		unset(self::$conn[$conntype][$ident]);
+		end(self::$established[$uuid]);
+		return key(self::$established[$uuid]);
 	}
 
 	public static function sendMessage($uuid, $message){
 		if(!empty(self::$established[$uuid])){
-			self::$established[$uuid]->send('message: '.$message);
+			foreach(self::$established[$uuid] as $k => $conn){
+				if(!$conn->send('message: '.$message)){
+					E('failed connection');
+					unset(self::$established[$uuid][$k]);
+				}
+			}
 		}
+		error_log('ESTABLISHED: '.count(self::$established[$uuid]));
 	}
 
 	public static function sendGroupMessage($group,$message){
@@ -87,10 +96,14 @@ class Server
 		}
 	}
 
-	public static function disconnect($conntype, $ident){
+	public static function disconnect($conntype, $uuid, $ident, $index){
 		if(!empty(self::$conn[$conntype][$ident])){
 			self::$conn[$conntype][$ident]->__destruct();
 			unset(self::$conn[$conntype][$ident]);
+		}
+		if(!empty(self::$established[$uuid][$index])){
+			self::$established[$uuid][$index]->__destruct();
+			unset(self::$established[$uuid][$index]);
 		}
 	}
 

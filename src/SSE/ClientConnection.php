@@ -25,6 +25,7 @@ class ClientConnection
 		$this->fd = $fd;
 		$this->ident = $ident;
 		$this->id = 0;
+		$this->index = null;
 		$this->eventStore = $eventStore;
 
 		$dns_base = new EventDnsBase($this->base, TRUE);
@@ -48,7 +49,7 @@ class ClientConnection
 		// If client hasn't sent headers within 3 sec, kill it
 		$e = Event::timer($base, function() use (&$e, $ident){
 			if(empty($this->headers)){
-				Server::disconnect('client',$ident);
+				Server::disconnect('client',null,$ident,null);
 			}
 			$e->delTimer();
 		});
@@ -88,6 +89,7 @@ class ClientConnection
 		if ($events & EventBufferEvent::TIMEOUT) {
 		}
 		if ($events & EventBufferEvent::EOF) {
+			Server::disconnect('client',$this->uuid,$this->ident,$this->index);
 		}
 		if ($events & EventBufferEvent::ERROR) {
 		}
@@ -142,7 +144,7 @@ class ClientConnection
 			"",""
 		));
 		$output = $this->bev->output;
-		$output->add($message);
+		return $output->add($message);
 	}
 
 	private function processRequest(){
@@ -162,7 +164,7 @@ class ClientConnection
 			"","",""
 		)));
 
-		Server::assignUUID('client', $this->ident, $this->uuid);
+		$this->index = Server::assignUUID('client', $this->ident, $this->uuid);
 
 		$events = $this->eventStore->getEvents($this->uuid, $last_event_id);
 		foreach($events as $event){
