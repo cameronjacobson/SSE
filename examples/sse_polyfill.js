@@ -24,7 +24,8 @@
 
 		var TRIES = 0;
 		var TIME_STARTED = parseInt(new Date().getTime()/1000);
-		var RECONNECT_TIME = 3000;
+		var XHR_TIMEOUT = 3000;
+		var RECONNECT_TIME = 2000;
 		// FAILURES ALLOWED PER MINUTE BEFORE ABORT
 		var FAILURES_PER_MINUTE = 5;
 
@@ -134,7 +135,7 @@
 						ev = value.trim();
 						break;
 					case 'data':
-						data += value.trimLeft();
+						data += value.trim();
 						break;
 					case 'retry':
 						if((rctime = parseInt(value)) > 0){
@@ -143,15 +144,17 @@
 						break;
 				}
 			});
-			if(data){
-				ev = ev || 'message';
-				callListeners(ev,data);
-			}
+			callListeners(ev,data);
 		}
 
 		var readyStateChange = function(e){
-			if(this.xhrProgress && (this.readyState == 4) && (this.status == 200)){
-				this.xhrProgress();
+			if(this.readyState === 3){
+				this.LOADED = true;
+				FAILURES_PER_MINUTE = 5;
+			}
+			if((this.readyState == 4) && (this.status == 200)){
+				this.LOADED = false;
+				//xhrClosed();
 			}
 		}
 
@@ -181,23 +184,47 @@
 			TRIES++;
 			var MINUTES = parseInt(((new Date().getTime() / 1000) - TIME_STARTED) / 60);
 			if(TRIES > 100 || (MINUTES >= 1 && (TRIES / MINUTES > FAILURES_PER_MINUTE))){
-				return;
+				console.log('TOO MANY FAILURES: RECONNECT TIME IS NOW 60 SECONDS');
+				RECONNECT_TIME = 60000;
 			}
 			responseTextOffset = 0;
 			var xhr = new XMLHttpRequest();
-			xhr.onreadystatechange = readyStateChange.bind(xhr);
-			xhr.onprogress = xhrProgress.bind(xhr);
-			xhr.onloadend = xhrLoadEnd.bind(xhr);
-
 			readyState = CONNECTING;
+			xhr.onreadystatechange = readyStateChange.bind(xhr);
+			xhr.onloadstart = xhrLoadStart.bind(xhr);
+			xhr.onloadend = xhrLoadEnd.bind(xhr);
+			xhr.onerror = xhrError.bind(xhr);
+			xhr.onload = xhrLoad.bind(xhr);
+			xhr.onabort = xhrAbort.bind(xhr);
 			xhr.open('get', urlstring, true);
+
+
+
+			if(false){
+				if(!/(Trident|MSIE)/.test(navigator.userAgent)){
+					//xhr.responseType = '';
+					window.setTimeout(function(){
+						if(!this.STARTED || !this.LOADED){
+							this.abort();
+							readyState = CLOSED;
+							//callListeners('error',{type:"timeout"});
+							if(!ABORTED){
+								startEventSource();
+							}
+						}
+					}.bind(xhr),XHR_TIMEOUT);
+				}
+			}
+
+			xhr.onprogress = xhrProgress.bind(xhr);
+
 			if(last_event_id > 0){
 				xhr.setRequestHeader("Last-Event-ID", last_event_id);
 			}
 			xhr.setRequestHeader('Cache-Control','no-cache');
 
 			readyState = OPEN;
-			xhr.send();
+			xhr.send(null);
 			window.setTimeout(function(){
 				callListeners('open');
 			}.bind(this),0);
@@ -209,9 +236,54 @@
 			},RECONNECT_TIME);
 		}
 
+		var xhrLoadStart = function(e){
+			this.STARTED = true;
+		}
+
 		var xhrLoadEnd = function(e){
+			if(e.type !== 'loadend'){
+				return;
+			}
+/*
 			readyState = CLOSED;
 			callListeners('error',e);
+			if(!ABORTED){
+				startEventSource();
+			}
+*/
+		}
+
+		var xhrAbort = function(e){
+		}
+
+		var xhrLoad = function(e){
+			//this.LOADED = true;
+			readyState = CLOSED;
+			callListeners('error',e);
+			if(!ABORTED){
+				startEventSource();
+			}
+		}
+
+		var xhrError = function(e){
+			readyState = CLOSED;
+			callListeners('error',e);
+			if(!ABORTED){
+				startEventSource();
+			}
+		}
+
+		var xhrTimeout = function(e){
+			readyState = CLOSED;
+			callListeners('error',e);
+			if(!ABORTED){
+				startEventSource();
+			}
+		}
+
+		var xhrClosed = function(){
+			readyState = CLOSED;
+			callListeners('error',{type:"closed"});
 			if(!ABORTED){
 				startEventSource();
 			}
@@ -222,7 +294,13 @@
 		var callListeners = function(type,data){
 			if(listeners && listeners[type]){
 				var e = new Event();
-				e.data = typeof data === 'string' ? JSON.parse(data) : data;
+				try{
+					e.data = typeof data === 'string' ? JSON.parse(data) : data;
+				}
+				catch(ev){
+					console.log(ev);
+					e.data = '';
+				}
 				if(typeof listeners[type] === 'function'){
 					listeners[type](e);
 					return;

@@ -137,7 +137,7 @@ class ClientConnection
 
 		$this->eventStore->putEvent($evt);
 
-		$message = implode("\n",array(
+		$message = "\n".implode("\n",array(
 			'event: '.$event,
 			'data: '.trim($data),
 			'id: '.$this->id,
@@ -148,7 +148,7 @@ class ClientConnection
 	}
 
 	private function processRequest(){
-		$last_event_id = empty($this->headers['last-event-id']) ? 0 : $this->headers['last-event-id'];
+		$this->id = $last_event_id = empty($this->headers['last-event-id']) ? 0 : $this->headers['last-event-id'];
 
 		$output = $this->bev->output;
 		$output->add(implode("\r\n",array(
