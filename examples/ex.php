@@ -2,13 +2,13 @@
 
 require_once(dirname(__DIR__).'/vendor/autoload.php');
 
-use SSE\EventStore;
+use SSE\Config as SSEConfig;
 use SSE\Server;
 
-$config = parse_ini_file(dirname(__DIR__).'/config/sample_config.ini',true);
-$eventStore = new EventStore($config);
+$server = new Server(
+	new SSEConfig(dirname(__DIR__).'/config/sample_config.ini')
+);
 
-$server = new Server($eventStore);
 $server->loop();
 
 function E($v){

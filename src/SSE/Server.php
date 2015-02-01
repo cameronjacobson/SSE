@@ -7,6 +7,7 @@ use \EventUtil;
 use \EventListener;
 use \SSE\EventStoreInterface;
 use \Event;
+use \SSE\Config;
 use \SSE\SSEEvent;
 
 class Server
@@ -17,23 +18,24 @@ class Server
 	private $eventStore;
 	public static $subscriptions;
 
-	public function __construct(EventStoreInterface $eventStore){
+	public function __construct(Config $config){
 		self::$conn = array('server'=>array(),'client'=>array());
-		$this->base = new EventBase();
+		$this->base = $config->base;
 
-		$this->eventStore = $eventStore;
+		$this->eventStore = $config->store;
+
 		self::$subscriptions = $this->eventStore->getAllSubscriptions();
 
 		$this->browserListener = new EventListener($this->base,
 			array($this, "clientConnCallback"), $this->base,
 			EventListener::OPT_CLOSE_ON_FREE | EventListener::OPT_REUSEABLE, -1,
-			"0.0.0.0:20000"
+			$config->client['ip'].':'.$config->client['port']
 		);
 
 		$this->serverListener = new EventListener($this->base,
 			array($this, 'serverConnCallback'), $this->base,
 			EventListener::OPT_CLOSE_ON_FREE | EventListener::OPT_REUSEABLE, -1,
-			"127.0.0.1:9499"
+			$config->server['ip'].':'.$config->server['port']
 		);
 
 		$this->browserListener->setErrorCallback(array($this, "accept_error_cb"));
